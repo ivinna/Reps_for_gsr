@@ -1,0 +1,287 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r, setup, include = F, echo=FALSE}
+library(stringr)
+library(dplyr)
+#Выберите номер тестирования, по умолчанию 1
+n <- 1
+load("../data/df.Rdata")
+load("../data/rawgsr.Rdata")
+
+surname <- "Пильщик"
+firstname <-  "Анастасия"
+z <- df%>%
+  filter(sname == surname, name == firstname)%>%
+  select(one_of(names(df)[c(8, 9,10,11,12,13, 4, 5, 6)]))
+nom <- as.numeric(z[,4])
+seval <- c(as.numeric(as.character(z[[7]][n])), as.numeric(as.character(z[[8]][n])), as.numeric(as.character(z[[9]][n])))
+dates <- z[,2]
+times <- z[,3]
+nom <- nom[n]
+gsr <- as.numeric(rawgsr[nom][[1]])
+gsr <- gsr[-length(gsr)]
+z
+
+```
+
+
+---
+title: "Тестирование саморегуляции"
+author: "ФГБУ СПбНИИФК"
+output:
+  word_document: default
+  html_document: default
+---
+**Дата теста**`r paste("    ", dates[n])`
+**Время начала тестa**`r paste("    ", times[n])`
+
+**Описание теста.**
+В первую минуту теста фиксируется исходное состояние, затем в течение трёх минут необходимо достичь состояния релаксации, после четвёртой минуты - максимально активироваться. Также предлагается оценить своё состояние от 0 до 10, где 0 - спокойное, сонное состояние, 10 - максимально активное, мобилизованное. Звёздочками на графике отмечены баллы самооценки состояния. Выводы делаются на основании того, насколько полученные изменения КГР соответствуют инструкции, а баллы самооценки – изменениям КГР. Балльные оценки релаксации и активации приводятся по 10-ти балльной шкале.
+
+**Самооценка состояния:** фон `r z[n,7]`, релаксация `r z[n,8]`, активация `r z[n,9]`.
+
+
+```{r, echo=FALSE}
+q <- 8 #измерений в секунду
+m1 <- 1 #количество минут фона
+m2 <- 4 #количество минут до начала активации
+s <- 10 #количество измерений отрезка
+l <- 2900#длина файла
+z1 <- m1*q*60#расчитываем, сколько измерений в нужном нам количестве минут (480)
+z2 <- m2*q*60#расчитываем, сколько измерений в нужном нам количестве минут (1920)
+#расчитаем интервалы
+#фон - измерения за минуту исходного уровня (1-я минута) фон переводим в мкс
+a <- mean(1/gsr[1:z1]*1000000, na.rm = T)
+#релаксация
+b <- round(100-mean(gsr[(z2-s):z2])*100/(mean(gsr[(z1-s):z1])), digits = 0)
+#активация
+#в случае, если получается ноль, округляю до двух знаков после запятой. Нужно для того, чтобы активация оценивалась, и можно было понять, всёже чуть больше или чуть меньше нуля она
+c <- 100-min(gsr[(z2+1):l], na.rm = T)*100/mean(gsr[(z2-s):z2])
+d <- 100-min(gsr[(z2+1):l], na.rm = T)*100/mean(gsr[(z1-s):z1])
+e <- 100-min(gsr[(z2+1):l], na.rm = T)*100/mean(gsr[1:z1])
+c <- ifelse(round(c, digits = 0)==0, 
+       round(c, digits = 2),
+       round(c, digits = 0))
+
+table <- data.frame(cbind(round(a, 2), b, c))
+names(table) <- c("fon", "rel", "act")
+
+```
+
+
+```{r, echo=FALSE}
+vecl <- c(fon=ifelse(table$fon>=0, T, F),
+          rel=ifelse(table$rel<0, T, F),
+          rel_=ifelse(table$rel>=0, T, F),
+          act = ifelse(table$rel<0 & table$act>0, T, F),
+          act_= ifelse(table$rel>=0 &table$act>0, T, F),
+          act0=ifelse(table$rel<0 & table$act<=0, T, F),
+          act0_=ifelse(table$rel>=0 & table$act<=0, T, F))
+names(table) <- names(which(vecl==T))
+
+load("Scores2.RData")
+
+df[6,] <- seq(-1, 0, length.out =4)
+df[7,] <- seq(-1, 0, length.out =4)
+df2[6,] <- seq(-1, 0, length.out =11)
+df2[7,] <- seq(-1, 0, length.out =11)
+
+df <- df[names(table),]
+df2 <- df2[names(table),]
+
+vec <- as.numeric(table)
+
+sc3 <- as.character()
+for (i in 1:3){
+  ifelse(vec[i]<0,
+         d <- cut(vec[i], df[i,], right=FALSE, labels=c("высокая", "средняя", "низкая")),          d <- cut(vec[i], df[i,], right=FALSE, labels=c("низкая", "средняя", "высокая")))
+  sc3 <-c(sc3, as.character(d))
+}
+
+sc10 <- as.numeric(as.character())
+for (i in 1:3){
+  ifelse(vec[i]<0,
+         c <- cut(vec[i], df2[i,], right=FALSE, labels=c(10:1)),
+         c <- cut(vec[i], df2[i,], right=FALSE, labels=c(1:10)))
+  sc10 <-c(sc10, as.numeric(as.character(c)))
+}
+
+t <- as.data.frame(cbind(as.vector(vec), sc3, sc10))
+names(t) <- c("показатель", "оценка", "балл")
+```
+
+```{r functions,echo=FALSE}
+#здесь собраны все функции и их описание
+find_diff <- function(v){
+  ifelse(sign(v[1])==sign(v[2]),
+         ifelse(abs(v[1])>abs(v[2]),abs(v[1])-abs(v[2]), abs(v[2])-abs(v[1])),
+         sum(abs(v[1]), abs(v[2])))
+}
+perc2 <- function(vec){round(vec[2]*100/vec[1], digits = 2)}#не нужна
+
+fdiff <- function(v){
+  ifelse(abs(v[1])>abs(v[2]),abs(v[1])-abs(v[2]), abs(v[2])-abs(v[1]))
+}
+fd <- function(v){#первое значение - фон, относительно которого оценивается
+  round(fdiff(v)*100/abs(v[1]), digits = 2)
+}
+#функция применяется к векторам self и real
+vec_int <- function(v){
+vec <- c()
+vec[1] <- ifelse(v[1]<v[2], T, F)#T релаксация не осуществлена 
+vec[2] <- ifelse(v[1]<v[3], T, F)#T активация от фона не осуществлена
+vec[3] <- ifelse(v[2]<v[3], T, F)#T активация от релаксации осуществлена
+vec
+}
+
+add_perc <- function(x, y){
+  x+x*y/100
+}
+#если первое значение правда, а это означает, что первая самооценка меньше, чем вторая, и испытуемый считает, что он не расслабился, вычесть из числа процент разницы, иначе прибавить
+# эта функция используется для поиска точек самооценки на графике КГР. первая переменная это или первое (T испытуемый считает, что не расслабился, F - испытуемый считает, что расслабился), или второе (T активация от фона не осуществлена, F активация от фона осуществлена ) значение вектора self
+
+find_point <- function(a, b, c){
+  ifelse(a==T, b-b*c/100, b+b*c/100)
+}
+find_point2 <- function(a, b, c){
+  ifelse(a==T, b+b*c/100, b-b*c/100)
+}
+
+persec <- 8 #измерений в секунду
+min_fon <- 1 #количество минут фона
+min_rel <- 4 #количество минут до начала активации
+s <- 10 #количество измерений отрезка
+#l <- 2900#длина файла
+index1 <- min_fon*persec*60#расчитываем, сколько измерений в нужном нам количестве минут (480)
+index2 <- min_rel*persec*60#расчитываем, сколько измерений в нужном нам количестве минут (1920)
+#расчитаем интервалы
+# создадим 3 вектора для расчёта фона, релаксации и активации
+#fon_ind_mean <- 1:index1
+fon_ind <- (index1-s):index1#10 измерений до начала релаксации
+rel_ind <- (index2-s):index2#10 измерений до конца релаксации
+act_ind <- (index2+1):length(gsr)#отрезок от начала активации до конца теста
+
+#как считать фон? по среднему за минуту, или 10 сек до начала релаксации?
+#v_fon_m <- mean(gsr[fon_ind_mean])
+#Релаксация, фон, активация в Омах
+o_fon <- mean(gsr[fon_ind])
+o_rel <- mean(gsr[rel_ind])
+o_act <- min(gsr[act_ind])
+
+s_fon <- mean(1/gsr[fon_ind]*1000000)
+s_rel <- mean(1/gsr[rel_ind]*1000000)
+s_act <- max(1/gsr[act_ind]*1000000)
+
+tt <- round(data.frame(rbind(seval, c(o_fon, o_rel, o_act), c(s_fon, s_rel, s_act))), digits=2)
+colnames(tt) <- c("fon", "rel", "act")
+rownames(tt) <- c("self", "om", "ms")
+
+#находим значение разницы в процентах между значениями отрезков
+tt$rf <- apply(tt[, 1:2], 1, fd)
+tt$ar <- apply(tt[, c(2, 3)], 1, fd)
+tt$af <- apply(tt[, c(1, 3)], 1, fd)
+real <-as.numeric(tt[3, 1:3 ])
+self <- as.numeric(tt[1, 1:3 ])
+#vec_int(real) если первое значение вектора меньше второго, то Т, иначе F 
+#(T релаксация не осуществлена )
+#если первое значение вектора меньше третьего, то Т, иначе F 
+#(T активация от фона не осуществлена)
+#если второе значение вектора меньше третьего, то Т, иначе F
+##(T активация от релаксации осуществлена)
+#Третье значение вектора возможно не нужно
+real<- vec_int(real)
+self<- vec_int(self)
+#соответствует ли реальность самооценке
+comp <- real==self
+#если самооценка релаксации comp[1] и самооценка активации comp[2]  соответствуют реальности, то найти разницу, если не соответствует, то сумму
+err_ro <- ifelse(comp[1]==T, fdiff(tt$rf[1:2]), sum(tt$rf[1:2]))
+err_ao <- round(ifelse(comp[2]==T, fdiff(tt$af[1:2]), sum(tt$af[1:2])), digits = 2)
+
+```
+
+
+**Оценка показателей**
+```{r, echo=FALSE}
+#Часть 1 Фон
+p1 <- paste("Значение фона", t[1,1], "мкСм", "(оценка:", t[1,2], ", балл:", t[1,3],").")
+
+#Часть 2 Релаксация
+p1 <- paste("Значение фона", t[1,1], "мкСм", "(оценка:", t[1,2], ", балл:", t[1,3],").")
+
+#Часть 2 Релаксация
+p2_1 <- ifelse(table$rel < 0, paste("Релаксация составила"),
+               paste("Релаксация отсутствует,"))
+p2_2 <- ifelse(table$rel > 0, paste("c 1 по 4 минуту наблюдалось повышение активации на", t[2,1], "%", "(оценка:", t[2,2], ", балл:", t[2,3],")."), paste( t[2,1], "%", "(оценка:", t[2,2], ", балл:", t[2,3],")."))
+
+#Часть 3 Активация
+p3_1 <- ifelse(table$act > 0, paste("Активация с 4 минуты до конца теста составила"),paste("Активация отсутствует"))
+
+p3_2 <- ifelse(table$act < 0, paste("Снижение уровня активации на", t[3,1], "%", "(оценка:", t[3,2],", балл:", t[3,3], ")."),
+               paste( t[3,1], "%", "(оценка:", t[3,2], ", балл:", t[3,3], ")."))
+
+paste(p1, p2_1, p2_2, "Ошибка в самооценке релаксации составила", round(err_ro, digits = 0), "%.",
+      p3_1, p3_2, "Ошибка в самооценке активации составила", round(err_ao, digits = 0), "%.")
+
+```
+
+
+**График изменения КГР**
+```{r, echo=FALSE}
+
+u <- mean(gsr[fon_ind])#фоновое значение
+#v <-mean(gsr[fon_ind])+mean(gsr[fon_ind])*t$rf[1]/100 #релаксация
+#w<- mean(gsr[fon_ind])-mean(gsr[fon_ind])*(t$af[1]-100)/100#активация
+#v <- add_perc(t$fon[2], t$rf[1]) #релаксация
+v <- ifelse(find_point(self[1], tt$fon[2], tt$rf[1])>0, 
+            find_point(self[1], tt$fon[2], tt$rf[1]), 0)#релаксация
+#w <- add_perc(t$fon[2], t$af[1])#активация
+w <- ifelse(find_point(self[2], tt$fon[2], tt$af[1])>0,
+            find_point(self[2], tt$fon[2], tt$af[1]), 0)
+k <- max(c(v, w))
+ms <- seq(0, by = 1/(8*60) ,length = length(gsr)) #создание вектора времени
+mks <- gsr #перевод в условные единицы  
+s <- ifelse(max(mks,na.rm=T)>k, max(mks,na.rm=T), k)
+plot(x = ms, y = mks, col = "blue", 
+     main = paste(surname, firstname), cex = 0.05, xlab ="Время в минутах",
+     ylab ="Электрическое сопротивление кожи (Ом)", ylim = c(s, 0),lty=1, lwd=1, pch = 20, type = "l")
+abline(v = c(1, 4), h = u, lty=2)
+
+points(0, u,  col = "red", cex = 1,pch = 8)
+points(1, u,  col = "red", cex = 1, pch = 8)
+points(4, v, col = "red", cex = 1, pch = 8)
+points(5, w,col = "red", cex = 1, pch = 8)
+points(4, tt$rel[2],col = "green", cex = 1, pch = 17)
+points(5, tt$act[2],col = "green", cex = 1, pch = 17)
+```
+
+```{r, echo=FALSE}
+diapr <- ifelse(t[2,2]=="низкая", "небольшом",
+                ifelse(t[2,2]=="средняя", "среднем", "значительном"))
+diapr0 <- ifelse(t[2,2]=="низкая", "небольшое",
+                 ifelse(t[2,2]=="средняя", "среднее", "существенное"))
+diapract <- ifelse(t[3,2]=="низкая", "небольшом",
+                   ifelse(t[3,2]=="средняя", "среднем", "значительном"))
+diapract0 <- ifelse(t[3,2]=="низкая", "небольшом",
+                    ifelse(t[3,2]=="средняя", "среднем", "значительном"))
+```
+**Интерпретация**
+```{r, echo=FALSE}
+# Релаксация
+p2_1 <- ifelse(table$rel < 0, paste("Спортсмен продемонстрировал способность к релаксации в", diapr,"диапазоне,"),
+               paste("Спортсмен не смог продемонстрировать способность к релаксации,"))
+
+p2_2 <- ifelse(table$rel > 0, paste("вместо релаксации наблюдалось", diapr0, "повышение уровня активации."), paste("оценка:", t[2,2],"."))
+
+#Часть 3 Активация
+p3_1 <- ifelse(table$act > 0, paste("После сигнала к началу активации уровень активации изменился в"),paste("После сигнала к началу активации, уровень активации повысить не удалось."))
+
+p3_2 <- ifelse(table$act < 0, paste("Произошло снижение уровня активации в", diapract0, "диапазоне"),
+               paste(diapract,"диапазоне"))
+
+paste(p2_1, p2_2, p3_1, p3_2)
+
+```
