@@ -99,6 +99,7 @@ renew2 <- function(){
   dat$X3 <- gsub(" #myTime: ", "", dat$X3, fixed=TRUE)
   names(dat) <- c("id", "date", "time")
   ath <- read.xlsx("data/athletes.xlsx", sheetIndex = 1, encoding = "UTF-8")
+  #ath <- read.csv2("data/athletes.csv")
   df <- inner_join(dat, ath, by = "id")
   df$N<- 1:nrow(df)
   
