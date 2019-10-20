@@ -12,8 +12,8 @@ n <- 1
 load("../data/df.Rdata")
 load("../data/rawgsr.Rdata")
 
-surname <- "Сучков"
-firstname <-  "Даниил"
+surname <- "Волков"
+firstname <-  "Денис"
 z <- df%>%
   filter(sname == surname, name == firstname)%>%
   select(one_of(names(df)[c(8, 9,10,11,12,13, 4, 5, 6)]))
